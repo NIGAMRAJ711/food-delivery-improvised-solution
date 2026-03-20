@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapido Combo Route Algorithm</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0a0f; --surface:#12121a; --card:#1a1a26; --border:#2a2a3e;
+  --accent:#ff6b00; --accent2:#00d4ff; --text:#e8e8f0; --muted:#6b6b8a;
+  --green:#00ff88; --red:#ff4466; --yellow:#ffd700; --purple:#c77dff;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden;}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,107,0,0.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,107,0,0.04) 1px,transparent 1px);
+  background-size:40px 40px;}
+.wrap{position:relative;z-index:1;max-width:1140px;margin:0 auto;padding:24px 20px 70px;}
+
+/* ── header ── */
+header{display:flex;align-items:center;gap:16px;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid var(--border);}
+.logo{background:var(--accent);color:#000;font-family:'Space Mono',monospace;font-weight:700;font-size:13px;padding:6px 12px;letter-spacing:2px;}
+.hinfo{flex:1;}
+.htitle{font-size:16px;font-weight:800;}
+.hsub{color:var(--muted);font-size:12px;font-family:'Space Mono',monospace;}
+.badge{background:rgba(0,212,255,0.1);border:1px solid var(--accent2);color:var(--accent2);font-family:'Space Mono',monospace;font-size:11px;padding:4px 10px;}
+
+/* ── metrics row ── */
+.mrow{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:22px;}
+@media(max-width:760px){.mrow{grid-template-columns:repeat(3,1fr);}}
+.mc{background:var(--card);border:1px solid var(--border);padding:13px 8px;text-align:center;transition:border-color .3s,transform .2s;}
+.mc.pulse{border-color:var(--accent);transform:scale(1.02);}
+.mv{font-size:20px;font-weight:800;font-family:'Space Mono',monospace;color:var(--accent);line-height:1.1;}
+.mv.g{color:var(--green);} .mv.b{color:var(--accent2);} .mv.r{color:var(--red);} .mv.y{color:var(--yellow);}
+.ml{font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:4px;text-transform:uppercase;}
+
+/* ── two col ── */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;}
+@media(max-width:720px){.two{grid-template-columns:1fr;}}
+
+/* ── section title ── */
+.sec{font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:13px;display:flex;align-items:center;gap:8px;}
+.sec::before{content:'';display:inline-block;width:7px;height:7px;background:var(--accent);}
+
+/* ── map ── */
+.mapwrap{position:relative;}
+#mapCanvas{width:100%;height:340px;display:block;background:#0d0d18;border:1px solid var(--border);}
+#verdict{position:absolute;top:10px;right:10px;z-index:10;pointer-events:none;
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:2px;
+  padding:6px 14px;border:1.5px solid;transition:all .35s;}
+#verdict.ok  {background:rgba(0,255,136,0.18); border-color:var(--green);color:var(--green);}
+#verdict.bad {background:rgba(255,68,102,0.18);border-color:var(--red);  color:var(--red);}
+#verdict.wait{background:rgba(107,107,138,0.12);border-color:var(--muted);color:var(--muted);}
+.legend{display:flex;gap:10px;margin-top:9px;flex-wrap:wrap;}
+.leg{display:flex;align-items:center;gap:5px;font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);}
+.legdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* ── inputs ── */
+.inputs{display:flex;flex-direction:column;gap:9px;}
+.ig{display:flex;flex-direction:column;gap:3px;}
+label{font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);}
+.lhint{font-size:9px;color:var(--accent);font-family:'Space Mono',monospace;margin-top:-1px;}
+input[type=number]{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  padding:9px 12px;font-family:'Space Mono',monospace;font-size:14px;font-weight:700;
+  outline:none;transition:border-color .2s;width:100%;-moz-appearance:textfield;
+}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+input[type=number]:focus{border-color:var(--accent);}
+input[type=number]::placeholder{color:var(--muted);opacity:.4;font-size:11px;font-weight:400;}
+.runbtn{background:var(--accent);color:#000;border:none;padding:13px;
+  font-family:'Syne',sans-serif;font-weight:800;font-size:14px;
+  cursor:pointer;letter-spacing:1px;width:100%;margin-top:4px;
+  transition:opacity .2s,transform .1s;}
+.runbtn:hover{opacity:.88;transform:translateY(-1px);}
+.runbtn:active{transform:translateY(1px);}
+
+/* ── log ── */
+#log{background:#05050c;border:1px solid var(--border);padding:10px;
+  font-family:'Space Mono',monospace;font-size:11px;height:86px;
+  overflow-y:auto;color:var(--green);margin-top:10px;}
+.ll{margin-bottom:3px;line-height:1.4;}
+.ll.w{color:var(--yellow);} .ll.i{color:var(--accent2);} .ll.e{color:var(--red);} .ll.g{color:var(--green);}
+
+/* ── steps ── */
+.steps{display:flex;flex-direction:column;gap:7px;}
+.step{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;
+  background:var(--surface);border-left:3px solid var(--border);
+  transition:border-color .25s,background .25s,opacity .25s;opacity:.35;}
+.step.on {border-left-color:var(--accent); background:rgba(255,107,0,0.07);  opacity:1;}
+.step.ok {border-left-color:var(--green);  background:rgba(0,255,136,0.04);  opacity:1;}
+.step.err{border-left-color:var(--red);    background:rgba(255,68,102,0.05); opacity:1;}
+.step.warn{border-left-color:var(--yellow);background:rgba(255,215,0,0.05);  opacity:1;}
+.sn{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);min-width:22px;}
+.st{font-size:12px;line-height:1.5;}
+.ss{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:2px;}
+.sdyn{font-size:10px;font-family:'Space Mono',monospace;margin-top:4px;font-weight:700;}
+
+/* ── route card ── */
+#routeCard{background:var(--card);border:1px solid var(--border);padding:18px;margin-bottom:20px;display:none;}
+.rflow{display:flex;align-items:center;overflow-x:auto;padding:10px 0;gap:0;}
+.rnode{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:76px;}
+.rdot{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid;flex-shrink:0;}
+.rdot.c0{background:rgba(255,107,0,.2); border-color:var(--accent);}
+.rdot.c1{background:rgba(0,212,255,.2); border-color:var(--accent2);}
+.rdot.c2{background:rgba(255,215,0,.2); border-color:var(--yellow);}
+.rdot.c3{background:rgba(0,255,136,.2); border-color:var(--green);}
+.rdot.c4{background:rgba(199,125,255,.2);border-color:var(--purple);}
+.rlbl{font-size:9px;text-align:center;color:var(--muted);font-family:'Space Mono',monospace;line-height:1.35;}
+.rarr{flex:1;min-width:26px;height:2px;background:var(--border);position:relative;display:flex;align-items:center;justify-content:center;}
+.rarr::after{content:'▶';color:var(--accent);font-size:9px;}
+.rkm{font-size:9px;color:var(--accent);font-family:'Space Mono',monospace;position:absolute;top:-13px;white-space:nowrap;}
+.rtime{font-size:8px;color:var(--muted);font-family:'Space Mono',monospace;position:absolute;bottom:-13px;white-space:nowrap;}
+.vbadge{display:inline-block;padding:5px 14px;font-size:11px;font-family:'Space Mono',monospace;letter-spacing:1px;margin-top:10px;}
+.vbadge.ok {background:rgba(0,255,136,.12);border:1px solid var(--green);color:var(--green);}
+.vbadge.bad{background:rgba(255,68,102,.12);border:1px solid var(--red); color:var(--red);}
+
+/* ── earnings ── */
+.elist{display:flex;flex-direction:column;gap:7px;}
+.erow{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface);}
+.etype{font-size:12px;display:flex;align-items:center;gap:8px;}
+.edot{width:8px;height:8px;border-radius:50%;}
+.eamt{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;}
+.etot{border-top:1px solid var(--accent);background:rgba(255,107,0,.08);}
+.etot .eamt{color:var(--accent);font-size:15px;}
+.enet{border-top:1px dashed var(--border);background:rgba(0,255,136,.05);}
+.enet .eamt{color:var(--green);font-size:14px;}
+
+/* ── formula ── */
+.fbox{background:var(--surface);border:1px solid var(--border);padding:14px;margin-top:14px;}
+.ftit{font-size:10px;font-family:'Space Mono',monospace;color:var(--accent2);letter-spacing:2px;margin-bottom:10px;}
+.fc{font-size:11px;color:var(--muted);line-height:1.9;font-family:'Space Mono',monospace;}
+.fc span{color:var(--text);} .h1{color:var(--accent);font-weight:700;} .h2{color:var(--accent2);} .h3{color:var(--green);}
+
+canvas{image-rendering:crisp-edges;}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="wrap">
+
+<header>
+  <div class="logo">RAPIDO</div>
+  <div class="hinfo">
+    <div class="htitle">Combo Route Algorithm</div>
+    <div class="hsub">Smart Ride + Food Delivery · Auto Pickup &amp; Drop Order</div>
+  </div>
+  <div class="badge">ALGO v3.0</div>
+</header>
+
+<!-- DASHBOARD METRICS -->
+<div class="mrow">
+  <div class="mc"><div class="mv b" id="m-pickup-order">—</div><div class="ml">Pick First</div></div>
+  <div class="mc"><div class="mv b" id="m-drop-order">—</div><div class="ml">Drop First</div></div>
+  <div class="mc"><div class="mv" id="m-total-km">—</div><div class="ml">Total km</div></div>
+  <div class="mc"><div class="mv y" id="m-time">—</div><div class="ml">Est. Time</div></div>
+  <div class="mc"><div class="mv g" id="m-gross">—</div><div class="ml">Gross Earn</div></div>
+  <div class="mc"><div class="mv g" id="m-net">—</div><div class="ml">Net (85%)</div></div>
+</div>
+
+<!-- MAP + INPUTS -->
+<div class="two">
+  <div>
+    <div class="sec">Live Route Map</div>
+    <div class="mapwrap">
+      <canvas id="mapCanvas" width="520" height="340"></canvas>
+      <div id="verdict" class="wait">ENTER VALUES</div>
+    </div>
+    <div class="legend">
+      <div class="leg"><div class="legdot" style="background:#ff6b00"></div>Driver</div>
+      <div class="leg"><div class="legdot" style="background:#00d4ff"></div>Pass Pickup</div>
+      <div class="leg"><div class="legdot" style="background:#ffd700"></div>Restaurant</div>
+      <div class="leg"><div class="legdot" style="background:#00ff88"></div>Food Drop</div>
+      <div class="leg"><div class="legdot" style="background:#c77dff"></div>Pass Drop</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="sec">5 Route Inputs</div>
+    <div class="inputs">
+      <div class="ig">
+        <label>🏍 Driver → Restaurant (km)</label>
+        <div class="lhint">How far driver is from restaurant right now</div>
+        <input type="number" id="i1" placeholder="e.g. 2.0" min="0.1" max="30" step="0.1">
+      </div>
+      <div class="ig">
+        <label>👤 Driver → Passenger Pickup (km)</label>
+        <div class="lhint">How far driver is from passenger right now</div>
+        <input type="number" id="i2" placeholder="e.g. 1.2" min="0.1" max="30" step="0.1">
+      </div>
+      <div class="ig">
+        <label>🍔 Restaurant → Food Delivery Address (km)</label>
+        <div class="lhint">Distance from restaurant to customer's home</div>
+        <input type="number" id="i3" placeholder="e.g. 3.5" min="0.1" max="30" step="0.1">
+      </div>
+      <div class="ig">
+        <label>🏠 Passenger Pickup → Passenger Drop (km)</label>
+        <div class="lhint">Total passenger ride distance</div>
+        <input type="number" id="i4" placeholder="e.g. 5.0" min="0.1" max="30" step="0.1">
+      </div>
+      <div class="ig">
+        <label>📍 Food Delivery Address ↔ Passenger Drop (km)</label>
+        <div class="lhint">How close are the two destinations to each other</div>
+        <input type="number" id="i5" placeholder="e.g. 1.8" min="0" max="20" step="0.1">
+      </div>
+      <button class="runbtn" onclick="run()">▶ RUN ALGORITHM</button>
+    </div>
+    <div id="log">
+      <div class="ll i">// Enter all 5 distances and click Run Algorithm.</div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTIMAL ROUTE CARD -->
+<div id="routeCard">
+  <div class="sec">Optimal Combo Route</div>
+  <div class="rflow" id="routeFlow"></div>
+  <div id="routeVerdict"></div>
+</div>
+
+<!-- STEPS + EARNINGS -->
+<div class="two">
+  <div>
+    <div class="sec">Algorithm Execution Trace</div>
+    <div class="steps">
+      <div class="step" id="s1">
+        <div class="sn">01</div>
+        <div><div class="st">Decide Pickup Order</div>
+        <div class="ss">Driver→Restaurant vs Driver→Passenger · shorter = go first</div>
+        <div class="sdyn" id="d1"></div></div>
+      </div>
+      <div class="step" id="s2">
+        <div class="sn">02</div>
+        <div><div class="st">Add Restaurant Wait Time</div>
+        <div class="ss">Passenger sits on bike · 5 min wait baked into total time</div>
+        <div class="sdyn" id="d2"></div></div>
+      </div>
+      <div class="step" id="s3">
+        <div class="sn">03</div>
+        <div><div class="st">Decide Drop Order</div>
+        <div class="ss">Food Drop vs Passenger Drop · which is on the way?</div>
+        <div class="sdyn" id="d3"></div></div>
+      </div>
+      <div class="step" id="s4">
+        <div class="sn">04</div>
+        <div><div class="st">Calculate Full Route km</div>
+        <div class="ss">Sum all segments · compare to solo delivery km</div>
+        <div class="sdyn" id="d4"></div></div>
+      </div>
+      <div class="step" id="s5">
+        <div class="sn">05</div>
+        <div><div class="st">Calculate Earnings</div>
+        <div class="ss">Delivery fee + ₹10/km Rapido + ₹8/km food · gross &amp; net</div>
+        <div class="sdyn" id="d5"></div></div>
+      </div>
+      <div class="step" id="s6">
+        <div class="sn">06</div>
+        <div><div class="st">Worth It? Final Verdict</div>
+        <div class="ss">Earnings per km combo vs solo · map goes green or red</div>
+        <div class="sdyn" id="d6"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="sec">Earnings Breakdown</div>
+    <div class="elist" id="earnList">
+      <div style="color:var(--muted);font-size:12px;font-family:'Space Mono',monospace;">Run algorithm to see earnings breakdown...</div>
+    </div>
+    <div class="fbox">
+      <div class="ftit">// Rate Card Used</div>
+      <div class="fc">
+        <span class="h1">Delivery fee</span> = ₹28 base + <span>₹8 × food_km</span><br>
+        <span class="h2">Rapido fare</span>  = ₹10 × passenger_km<br>
+        <span class="h3">Combo bonus</span>  = ₹15 from platform<br>
+        <span>Platform cut</span>   = 15% (driver keeps 85%)<br><br>
+        <span class="h3">Worth it if:</span><br>
+        · <span>net earn/km (combo) &gt; net earn/km (solo)</span><br>
+        · <span>combo km &lt; solo km × 1.5</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ── NODE LAYOUT (fixed positions) ───────────────────────────
+const NODES = {
+  driver:     {x:0.09,y:0.50,color:'#ff6b00',emoji:'🏍', role:'DRIVER'    },
+  passPickup: {x:0.30,y:0.78,color:'#00d4ff',emoji:'👤', role:'PASS PICKUP'},
+  restaurant: {x:0.42,y:0.16,color:'#ffd700',emoji:'🍔', role:'RESTAURANT' },
+  foodDrop:   {x:0.74,y:0.22,color:'#00ff88',emoji:'📦', role:'FOOD DROP'  },
+  passDrop:   {x:0.88,y:0.72,color:'#c77dff',emoji:'🏠', role:'PASS DROP'  },
+};
+
+const canvas = document.getElementById('mapCanvas');
+const ctx    = canvas.getContext('2d');
+let ST = {route:null, feasible:false, segs:[]};
+
+// ── DRAW ─────────────────────────────────────────────────────
+function draw() {
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0d0d18'; ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle='rgba(255,107,0,0.05)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // ghost lines
+  if(!ST.route){
+    ctx.setLineDash([3,8]); ctx.lineWidth=1;
+    const ks=Object.keys(NODES);
+    ks.forEach((a,i)=>ks.slice(i+1).forEach(b=>{
+      ctx.strokeStyle='rgba(255,255,255,0.025)';
+      ctx.beginPath();ctx.moveTo(NODES[a].x*W,NODES[a].y*H);ctx.lineTo(NODES[b].x*W,NODES[b].y*H);ctx.stroke();
+    }));
+    ctx.setLineDash([]);
+  }
+
+  // route
+  if(ST.route){
+    const pts=ST.route.map(k=>({x:NODES[k].x*W,y:NODES[k].y*H,color:NODES[k].color,key:k}));
+    const fix=ST.feasible?null:'#ff4466';
+    for(let i=0;i<pts.length-1;i++){
+      ctx.save();
+      ctx.shadowColor=fix||pts[i+1].color; ctx.shadowBlur=14;
+      const g=ctx.createLinearGradient(pts[i].x,pts[i].y,pts[i+1].x,pts[i+1].y);
+      g.addColorStop(0,(fix||pts[i].color)+'bb');
+      g.addColorStop(1,(fix||pts[i+1].color)+'bb');
+      ctx.strokeStyle=g; ctx.lineWidth=ST.feasible?3.5:2;
+      ctx.setLineDash(ST.feasible?[]:[7,5]);
+      ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[i+1].x,pts[i+1].y);ctx.stroke();
+      ctx.restore();
+    }
+    ctx.setLineDash([]);
+    // arrows + km
+    for(let i=0;i<pts.length-1;i++){
+      const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;
+      const ang=Math.atan2(pts[i+1].y-pts[i].y,pts[i+1].x-pts[i].x);
+      ctx.save();ctx.translate(mx,my);ctx.rotate(ang);
+      ctx.fillStyle=fix||pts[i+1].color;
+      ctx.beginPath();ctx.moveTo(9,0);ctx.lineTo(-7,-4);ctx.lineTo(-7,4);ctx.closePath();ctx.fill();
+      ctx.restore();
+      if(ST.segs[i]!==undefined){
+        const px=Math.cos(ang-Math.PI/2)*16,py=Math.sin(ang-Math.PI/2)*16;
+        ctx.save();
+        ctx.fillStyle='rgba(255,255,255,0.9)';
+        ctx.font='bold 10px Space Mono,monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(ST.segs[i].toFixed(1)+'km',mx+px,my+py);
+        ctx.restore();
+      }
+    }
+  }
+
+  // nodes
+  Object.entries(NODES).forEach(([,n])=>{
+    const x=n.x*W,y=n.y*H;
+    const glow=ctx.createRadialGradient(x,y,4,x,y,30);
+    glow.addColorStop(0,n.color+'3a');glow.addColorStop(1,'transparent');
+    ctx.fillStyle=glow;ctx.beginPath();ctx.arc(x,y,30,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(x,y,17,0,Math.PI*2);
+    ctx.fillStyle=n.color+'1a';ctx.fill();
+    ctx.strokeStyle=n.color;ctx.lineWidth=2;ctx.stroke();
+    ctx.font='15px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(n.emoji,x,y);ctx.textBaseline='alphabetic';
+    // label pill
+    ctx.font='bold 9px Space Mono,monospace';
+    const tw=ctx.measureText(n.role).width;
+    const lx=x,ly=y>H*0.70?y-34:y+34;
+    const pw=tw+12,ph=14;
+    ctx.fillStyle='rgba(7,7,16,0.92)';
+    rr(ctx,lx-pw/2,ly-ph/2,pw,ph,3);ctx.fill();
+    ctx.strokeStyle=n.color+'88';ctx.lineWidth=1;
+    rr(ctx,lx-pw/2,ly-ph/2,pw,ph,3);ctx.stroke();
+    ctx.fillStyle=n.color;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(n.role,lx,ly);ctx.textBaseline='alphabetic';
+  });
+}
+
+function rr(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.arcTo(x+w,y,x+w,y+r,r);
+  c.lineTo(x+w,y+h-r);c.arcTo(x+w,y+h,x+w-r,y+h,r);
+  c.lineTo(x+r,y+h);c.arcTo(x,y+h,x,y+h-r,r);
+  c.lineTo(x,y+r);c.arcTo(x,y,x+r,y,r);c.closePath();
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function addLog(msg,t=''){
+  const el=document.getElementById('log');
+  const d=document.createElement('div');d.className='ll '+t;d.textContent='> '+msg;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+function ss(n,s){document.getElementById('s'+n).className='step '+s;}
+function dyn(n,html){document.getElementById('d'+n).innerHTML=html;}
+function sv(id,cls,txt){const e=document.getElementById(id);e.className=cls;e.textContent=txt;}
+function sm(id,val,cls){
+  const e=document.getElementById(id);
+  e.textContent=val;
+  if(cls) e.className='mv '+cls;
+  const mc=e.closest('.mc');
+  if(mc){mc.classList.add('pulse');setTimeout(()=>mc.classList.remove('pulse'),500);}
+}
+function fmt(n){return n.toFixed(2);}
+
+// ── MAIN RUN ─────────────────────────────────────────────────
+function run(){
+  const dToR  = parseFloat(document.getElementById('i1').value); // driver → restaurant
+  const dToP  = parseFloat(document.getElementById('i2').value); // driver → pass pickup
+  const rToFD = parseFloat(document.getElementById('i3').value); // restaurant → food drop
+  const pToPD = parseFloat(document.getElementById('i4').value); // pass pickup → pass drop
+  const fdToPD= parseFloat(document.getElementById('i5').value); // food drop ↔ pass drop
+
+  if([dToR,dToP,rToFD,pToPD,fdToPD].some(v=>isNaN(v)||v<0)){
+    addLog('⚠ Enter all 5 distances first.','w');
+    sv('verdict','wait','ENTER ALL 5 VALUES');
+    return;
+  }
+
+  document.getElementById('log').innerHTML='';
+  for(let i=1;i<=6;i++) ss(i,'');
+  ST={route:null,feasible:false,segs:[]};
+  draw();
+  addLog('Inputs: dToR='+dToR+' dToP='+dToP+' rToFD='+rToFD+' pToP='+pToPD+' fdToPD='+fdToPD,'i');
+
+  const AVG_SPEED = 22; // km/h city traffic
+  const WAIT_REST = 5;  // minutes passenger waits at restaurant
+
+  // ── STEP 1: Pickup Order ─────────────────────────────────
+  ss(1,'on');
+  let pickupOrder, firstLeg, secondLeg, firstLegKm, toRestKm;
+
+  if(dToP <= dToR){
+    // passenger is closer → pick up passenger first, then go to restaurant
+    pickupOrder   = 'PASSENGER FIRST → RESTAURANT';
+    firstLeg      = 'passPickup';
+    firstLegKm    = dToP;
+    // after picking up passenger, driver goes to restaurant
+    // distance: pass pickup → restaurant (approximate via triangle)
+    toRestKm      = Math.abs(dToR - dToP * 0.6) + dToP * 0.4; // rough on-the-way estimate
+    toRestKm      = +toRestKm.toFixed(2);
+    addLog('Driver('+dToP+'km) closer to PASSENGER than Restaurant('+dToR+'km) → Pick passenger first','g');
+    addLog('Passenger will wait '+WAIT_REST+' min at restaurant on bike.','w');
+    dyn(1,'<span style="color:#00d4ff">👤 Passenger picked up first</span> · then 🍔 Restaurant');
+    ss(1,'ok');
+  } else {
+    // restaurant is closer → pick up food first, then passenger
+    pickupOrder   = 'RESTAURANT FIRST → PASSENGER';
+    firstLeg      = 'restaurant';
+    firstLegKm    = dToR;
+    toRestKm      = 0;
+    addLog('Driver('+dToR+'km) closer to RESTAURANT than Passenger('+dToP+'km) → Go to restaurant first','g');
+    addLog('Passenger will be picked up after food is collected.','i');
+    dyn(1,'<span style="color:#ffd700">🍔 Restaurant first</span> · then 👤 Passenger pickup');
+    ss(1,'ok');
+  }
+
+  // ── STEP 2: Wait time ────────────────────────────────────
+  ss(2,'on');
+  const waitCost = (dToP <= dToR)
+    ? '₹'+((WAIT_REST/60)*AVG_SPEED*10).toFixed(0)+' opportunity cost'
+    : 'No wait — passenger picked up after food';
+  addLog('Restaurant wait: 5 min · '+waitCost);
+  dyn(2, dToP<=dToR
+    ? '<span style="color:#ffd700">⏱ 5 min wait · passenger on bike at restaurant</span>'
+    : '<span style="color:#00ff88">✓ No passenger wait — food first</span>');
+  ss(2,'ok');
+
+  // ── STEP 3: Drop Order ───────────────────────────────────
+  ss(3,'on');
+  // We have: food drop and passenger drop
+  // fdToPD = distance between them
+  // if food drop is "before" pass drop on the route → deliver food first
+  // heuristic: if rToFD < pToPD (food destination is closer from restaurant)
+  // → food drop is likely on the way to passenger drop
+  let dropOrder, routeSegs, routeKeys, segKms;
+
+  if(fdToPD <= 2.0){
+    // destinations are very close — food drop first is almost always on-route
+    dropOrder = 'FOOD DROP FIRST (destinations are nearby — '+fdToPD+'km apart)';
+    addLog('Food Drop ↔ Pass Drop = '+fdToPD+'km — very close, deliver food first then drop passenger','g');
+    dyn(3,'<span style="color:#00ff88">📦 Food delivered first</span> · then 🏠 Passenger dropped ('+fdToPD+'km gap)');
+    ss(3,'ok');
+
+    if(dToP <= dToR){
+      // passenger first, then restaurant, then food drop, then pass drop
+      routeKeys = ['driver','passPickup','restaurant','foodDrop','passDrop'];
+      segKms    = [dToP, toRestKm, rToFD, fdToPD];
+    } else {
+      // restaurant first, then pass pickup, then food drop, then pass drop
+      routeKeys = ['driver','restaurant','passPickup','foodDrop','passDrop'];
+      segKms    = [dToR, Math.abs(dToR-dToP)*0.8+0.5, rToFD*0.6, fdToPD];
+    }
+  } else {
+    // destinations are far — check which is closer from the restaurant
+    if(rToFD <= pToPD * 0.7){
+      dropOrder = 'FOOD DROP FIRST (food destination is closer — '+rToFD+'km vs '+pToPD+'km)';
+      addLog('Food destination('+rToFD+'km) is closer → deliver food first, then drop passenger','g');
+      dyn(3,'<span style="color:#00ff88">📦 Food delivered first</span> · then 🏠 Passenger dropped');
+      ss(3,'ok');
+      if(dToP <= dToR){
+        routeKeys=['driver','passPickup','restaurant','foodDrop','passDrop'];
+        segKms=[dToP,toRestKm,rToFD,fdToPD];
+      } else {
+        routeKeys=['driver','restaurant','passPickup','foodDrop','passDrop'];
+        segKms=[dToR,Math.abs(dToR-dToP)*0.7+0.4,rToFD*0.55,fdToPD];
+      }
+    } else {
+      dropOrder = 'PASSENGER DROP FIRST (pass destination closer / on-route — '+pToPD+'km)';
+      addLog('Passenger drop is on-route, deliver passenger first then food','i');
+      dyn(3,'<span style="color:#c77dff">🏠 Passenger dropped first</span> · then 📦 Food delivered');
+      ss(3,'warn');
+      if(dToP <= dToR){
+        routeKeys=['driver','passPickup','restaurant','passDrop','foodDrop'];
+        segKms=[dToP,toRestKm,pToPD,fdToPD];
+      } else {
+        routeKeys=['driver','restaurant','passPickup','passDrop','foodDrop'];
+        segKms=[dToR,Math.abs(dToR-dToP)*0.7+0.4,pToPD,fdToPD];
+      }
+    }
+  }
+
+  // ── STEP 4: Total km ─────────────────────────────────────
+  ss(4,'on');
+  const totalKm   = +segKms.reduce((a,b)=>a+b,0).toFixed(2);
+  const soloKm    = +(dToR + rToFD).toFixed(2);       // delivery only
+  const extraKm   = +(totalKm - soloKm).toFixed(2);
+  const extraPct  = +((extraKm/soloKm)*100).toFixed(1);
+
+  addLog('Combo total: '+totalKm+'km | Solo delivery: '+soloKm+'km | Extra: +'+extraKm+'km (+'+extraPct+'%)');
+  dyn(4,'Combo <span style="color:#ff6b00">'+totalKm+'km</span> vs Solo <span style="color:#00d4ff">'+soloKm+'km</span> · Extra: <span style="color:'+(extraKm<soloKm*0.5?'#00ff88':'#ff4466')+'">+'+extraKm+'km</span>');
+  ss(4,'ok');
+
+  // ── STEP 5: Earnings ─────────────────────────────────────
+  ss(5,'on');
+  const deliveryFee  = +(28 + rToFD*8).toFixed(0);         // flat 28 + 8/km food
+  const rapidoFare   = +(pToPD*10).toFixed(0);              // 10/km passenger ride
+  const comboBonus   = 15;                                   // platform bonus
+  const grossTotal   = deliveryFee + rapidoFare + comboBonus;
+  const netTotal     = +(grossTotal * 0.85).toFixed(0);      // 85% to driver
+  const soloGross    = +(28 + rToFD*8).toFixed(0);
+  const soloNet      = +(soloGross * 0.85).toFixed(0);
+  const extraEarn    = grossTotal - soloGross;
+  const earnPerKm    = +(netTotal/totalKm).toFixed(2);
+  const soloEarnPKm  = +(soloNet/soloKm).toFixed(2);
+
+  addLog('Gross: ₹'+grossTotal+' | Net (85%): ₹'+netTotal+' | Solo net: ₹'+soloNet,'g');
+  addLog('Earn/km combo: ₹'+earnPerKm+' | Solo: ₹'+soloEarnPKm, earnPerKm>soloEarnPKm?'g':'w');
+  dyn(5,'Gross <span style="color:#00ff88">₹'+grossTotal+'</span> → Net <span style="color:#ff6b00">₹'+netTotal+'</span> · ₹'+earnPerKm+'/km');
+  ss(5,'ok');
+
+  // ── STEP 6: Verdict ──────────────────────────────────────
+  ss(6,'on');
+  const worthIt = earnPerKm >= soloEarnPKm && totalKm < soloKm * 1.5;
+  ST.route    = routeKeys;
+  ST.feasible = worthIt;
+  ST.segs     = segKms;
+
+  let verdictMsg, verdictClass;
+  if(worthIt){
+    verdictMsg   = '✓ WORTH IT · +₹'+extraEarn+' extra (₹'+earnPerKm+'/km)';
+    verdictClass = 'ok';
+    addLog('✓ COMBO WORTH IT — ₹'+earnPerKm+'/km > solo ₹'+soloEarnPKm+'/km','g');
+    dyn(6,'<span style="color:#00ff88">✓ Rider earns ₹'+netTotal+' net vs ₹'+soloNet+' solo</span>');
+  } else {
+    verdictMsg   = '✗ NOT WORTH IT · Only ₹'+earnPerKm+'/km vs ₹'+soloEarnPKm+'/km solo';
+    verdictClass = 'bad';
+    addLog('✗ NOT WORTH IT — earn/km too low or route too long','e');
+    dyn(6,'<span style="color:#ff4466">✗ Solo delivery pays better per km</span>');
+  }
+  sv('verdict',verdictClass,verdictMsg);
+  ss(6,'ok');
+
+  // ── Update all UI ────────────────────────────────────────
+  const estTimeMin = Math.round(totalKm/AVG_SPEED*60 + WAIT_REST);
+  sm('m-pickup-order', dToP<=dToR?'PASS':'REST', 'b');
+  sm('m-drop-order',   fdToPD<=2||rToFD<=pToPD*0.7?'FOOD':'PASS', 'b');
+  sm('m-total-km',     totalKm+'km', worthIt?'g':'r');
+  sm('m-time',         estTimeMin+'min','y');
+  sm('m-gross',        '₹'+grossTotal,'g');
+  sm('m-net',          '₹'+netTotal,'g');
+
+  updateRouteCard(routeKeys, segKms, estTimeMin, worthIt, netTotal, soloNet, grossTotal, soloGross,
+    deliveryFee, rapidoFare, comboBonus, earnPerKm, soloEarnPKm, extraKm, pickupOrder, dropOrder);
+  updateEarnings(deliveryFee, rapidoFare, comboBonus, grossTotal, netTotal, soloGross, soloNet, extraEarn, earnPerKm, soloEarnPKm, worthIt);
+  draw();
+  document.getElementById('routeCard').style.display='block';
+}
+
+// ── ROUTE CARD ────────────────────────────────────────────────
+function updateRouteCard(keys,segs,estMin,worthIt,net,soloNet,gross,soloGross,delFee,rap,bonus,epk,sepk,extraKm,pickOrder,dropOrder){
+  const meta={
+    driver:     {emoji:'🏍',label:'Driver',      cls:'c0'},
+    passPickup: {emoji:'👤',label:'Pass Pickup', cls:'c1'},
+    restaurant: {emoji:'🍔',label:'Restaurant',  cls:'c2'},
+    foodDrop:   {emoji:'📦',label:'Food Drop',   cls:'c3'},
+    passDrop:   {emoji:'🏠',label:'Pass Drop',   cls:'c4'},
+  };
+  const flow=document.getElementById('routeFlow');
+  flow.innerHTML='';
+  keys.forEach((key,i)=>{
+    const m=meta[key];
+    const nd=document.createElement('div'); nd.className='rnode';
+    nd.innerHTML=`<div class="rdot ${m.cls}">${m.emoji}</div><div class="rlbl">${m.label}</div>`;
+    flow.appendChild(nd);
+    if(i<keys.length-1){
+      const ar=document.createElement('div'); ar.className='rarr';
+      const km=segs[i]||0;
+      const t=Math.round(km/22*60);
+      ar.innerHTML=`<span class="rkm">${km.toFixed(1)}km</span><span class="rtime">~${t}min</span>`;
+      flow.appendChild(ar);
+    }
+  });
+
+  document.getElementById('routeVerdict').innerHTML=`
+    <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+      <span class="vbadge ${worthIt?'ok':'bad'}">${worthIt?'✓ COMBO WORTH IT':'✗ NOT WORTH IT'}</span>
+      <span style="font-size:10px;font-family:'Space Mono',monospace;color:var(--muted)">
+        Pickup: <b style="color:var(--accent2)">${pickOrder}</b> &nbsp;·&nbsp;
+        Drop: <b style="color:var(--green)">${dropOrder}</b>
+      </span>
+    </div>
+    <div style="margin-top:8px;font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);line-height:1.8;">
+      Est. total time: <span style="color:var(--yellow)">${estMin} min</span> (incl. 5 min restaurant wait)
+      &nbsp;·&nbsp;
+      Net earn: <span style="color:var(--green)">₹${net}</span> combo vs <span style="color:var(--accent2)">₹${soloNet}</span> solo
+      &nbsp;·&nbsp;
+      ₹${epk}/km vs ₹${sepk}/km
+    </div>`;
+}
+
+// ── EARNINGS ─────────────────────────────────────────────────
+function updateEarnings(del,rap,bonus,gross,net,soloGross,soloNet,extra,epk,sepk,worthIt){
+  const el=document.getElementById('earnList');
+  el.innerHTML=`
+    <div class="erow"><span class="etype"><span class="edot" style="background:#ffd700"></span>Food Delivery Fee (₹28 + ₹8/km)</span><span class="eamt" style="color:#ffd700">₹${del}</span></div>
+    <div class="erow"><span class="etype"><span class="edot" style="background:#00d4ff"></span>Rapido Ride (₹10/km × passenger km)</span><span class="eamt" style="color:#00d4ff">₹${rap}</span></div>
+    <div class="erow"><span class="etype"><span class="edot" style="background:#00ff88"></span>Combo Platform Bonus</span><span class="eamt" style="color:#00ff88">₹${bonus}</span></div>
+    <div class="erow etot"><span class="etype" style="font-weight:700">Gross Total</span><span class="eamt">₹${gross}</span></div>
+    <div class="erow enet"><span class="etype" style="font-weight:700">Net (after 15% cut)</span><span class="eamt">₹${net}</span></div>
+    <div style="margin-top:10px;font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);line-height:1.9;padding:0 2px;">
+      Solo delivery only: gross <span style="color:var(--text)">₹${soloGross}</span> → net <span style="color:var(--accent2)">₹${soloNet}</span><br>
+      Extra earned doing combo: <span style="color:${worthIt?'#00ff88':'#ff4466'};font-weight:700">₹${extra} gross / ₹${Math.round(extra*0.85)} net</span><br>
+      Earn per km → combo: <span style="color:${epk>=sepk?'#00ff88':'#ff4466'}">₹${epk}</span> &nbsp;|&nbsp; solo: <span style="color:var(--accent2)">₹${sepk}</span>
+    </div>`;
+}
+
+// ── Live map redraw as user types ────────────────────────────
+['i1','i2','i3','i4','i5'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{
+    ST={route:null,feasible:false,segs:[]};
+    draw();
+  });
+});
+
+draw();
+</script>
+</body>
+</html>
